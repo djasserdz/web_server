@@ -1,5 +1,6 @@
 #include "request.h"
 #include "response.h"
+#include "handler.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -11,6 +12,7 @@
 #include <fcntl.h>
 
 #define PORT 8080
+#define IP "127.0.0.1"
 
 int create_server_socket(int port)
 {
@@ -22,8 +24,9 @@ int create_server_socket(int port)
     }
     struct sockaddr_in adress;
     adress.sin_family = AF_INET;
-    adress.sin_addr.s_addr = INADDR_ANY;
+    // adress.sin_addr.s_addr = INADDR_ANY;
     adress.sin_port = htons(PORT);
+    inet_pton(AF_INET, IP, &adress.sin_addr);
 
     if (bind(server, (struct sockaddr *)&adress, sizeof(adress)) < 0)
     {
@@ -60,7 +63,7 @@ void set_non_blocking(int sockfd)
 
 void start_server(int server_fd)
 {
-    // set_non_blocking(server_fd);
+    set_non_blocking(server_fd);
 
     while (1)
     {
@@ -77,11 +80,7 @@ void start_server(int server_fd)
                 parse_request(buffer, bytes, &req);
 
                 struct response res;
-                strcpy(res.http_version, req.http_version);
-                res.status_code = 200;
-                strcpy(res.message, "OK");
-
-                send_response(client, &res, "<h1>Hello World</h1>");
+                handle_request(client, &req);
             }
             else if (bytes == 0)
             {

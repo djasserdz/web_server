@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "../include/server.h"
-#include "../include/request.h"
-#include "../include/response.h"
+#include "server.h"
+#include "request.h"
+#include "response.h"
 
 int main()
 {

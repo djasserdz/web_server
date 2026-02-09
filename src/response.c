@@ -5,23 +5,53 @@
 #include <stdio.h>
 #include "response.h"
 
-void send_response(int client_fd, struct response *res, const char *body)
+void send_response(int client_fd, struct response *res, const char *body, long body_size, const char *content_type)
 {
     char buffer[1024];
 
-    int body_length = body ? strlen(body) : 0;
-    int n = snprintf(buffer, sizeof(buffer),
-                     "%s %d %s\r\n"
-                     "Content-Length: %d\r\n"
-                     "Content-Type: text/html\r\n"
-                     "\r\n",
-                     res->http_version, res->status_code, res->message,
-                     body_length);
+    long n = snprintf(buffer, sizeof(buffer),
+                      "%s %d %s\r\n"
+                      "Content-Length: %ld\r\n"
+                      "Content-Type: %s\r\n"
+                      "\r\n",
+                      res->http_version, res->status_code, res->message,
+                      body_size, content_type);
 
     send(client_fd, buffer, n, 0);
 
-    if (body_length > 0)
+    if (body_size > 0)
     {
-        send(client_fd, body, body_length, 0);
+        send(client_fd, body, body_size, 0);
+    }
+}
+
+void set_response(struct response *res, int status_code)
+{
+    res->status_code = status_code;
+    strcpy(res->http_version, "HTTP/1.1");
+
+    switch (status_code)
+    {
+    case 200:
+        strcpy(res->message, "OK");
+        break;
+    case 404:
+        strcpy(res->message, "Not Found");
+        break;
+    case 500:
+        strcpy(res->message, "Internal Server Error");
+        break;
+    case 401:
+        strcpy(res->message, "Unauthorized");
+        break;
+    case 403:
+        strcpy(res->message, "Forbidden");
+        break;
+    case 201:
+        strcpy(res->message, "Created");
+        break;
+    default:
+        strcpy(res->message, "Unknown");
+        break;
     }
 }

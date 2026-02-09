@@ -8,6 +8,7 @@ struct response
     char message[20];
 };
 
-void send_response(int client_fd, struct response *res, const char *body);
+void send_response(int client_fd, struct response *res, const char *body, long body_size, const char *content_type);
+void set_response(struct response *res, int status_code);
 
 #endif
