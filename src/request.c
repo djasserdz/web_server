@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include "request.h"
 
+char *methods[9] = {"GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH", "TRACE", "CONNECT"};
+char *versions[3] = {"HTTP/1.0", "HTTP/1.1", "HTTP/2.0"};
+
 void parse_request(char *buffer, ssize_t length, struct request *req)
 {
     char *line_end = strstr(buffer, "\r\n");
@@ -21,7 +24,7 @@ void parse_request(char *buffer, ssize_t length, struct request *req)
     char *header_start = line_end + 2;
 
     int header_count = 0;
-    while (header_start < buffer + length && header_count < 20)
+    while (header_start < buffer + length)
     {
         char *header_end = strstr(header_start, "\r\n");
         if (!header_end || header_end == header_start)
@@ -33,15 +36,46 @@ void parse_request(char *buffer, ssize_t length, struct request *req)
         line[line_len] = '\0';
 
         char *colon = strstr(line, ": ");
-        if (colon)
+        while (header_start < buffer + length)
         {
-            *colon = '\0';
-            strncpy(req->headers[header_count][0], line, 255);
-            strncpy(req->headers[header_count][1], colon + 2, 255);
-            header_count++;
-        }
+            char *header_end = strstr(header_start, "\r\n");
+            if (!header_end || header_end == header_start)
+                break;
 
-        header_start = header_end + 2;
+            char line[512];
+            int line_len = header_end - header_start;
+            strncpy(line, header_start, line_len);
+            line[line_len] = '\0';
+
+            char *colon = strstr(line, ": ");
+            if (colon)
+            {
+                *colon = '\0';
+                char *key = line;
+                char *value = colon + 2;
+
+                if (strcasecmp(key, "Host") == 0)
+                {
+                    req->Host = malloc(sizeof(Header));
+                    req->Host->key = strdup(key);
+                    req->Host->value = strdup(value);
+                }
+                else if (strcasecmp(key, "Content-Type") == 0)
+                {
+                    req->Content_type = malloc(sizeof(Header));
+                    req->Content_type->key = strdup(key);
+                    req->Content_type->value = strdup(value);
+                }
+                else if (strcasecmp(key, "Content-Length") == 0)
+                {
+                    req->Content_length = malloc(sizeof(Header));
+                    req->Content_length->key = strdup(key);
+                    req->Content_length->value = strdup(value);
+                }
+            }
+
+            header_start = header_end + 2;
+        }
     }
     req->header_count = header_count;
 }

@@ -11,6 +11,11 @@ void handle_request(int client_fd, struct request *req)
 {
     struct response res;
     strcpy(res.http_version, req->http_version);
+    Header server = {"Server", "MyCServer/0.1"};
+    Header date = {"Date",
+                   NULL};
+    res.Server = &server;
+    res.Date = &date;
     long body_size = 0;
     char *body = serve_static_file(req->path, &res, &body_size);
 
