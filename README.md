@@ -7,6 +7,7 @@ A basic HTTP web server written in C. This server demonstrates:
 - Parsing simple HTTP GET requests
 - Sending basic HTTP responses
 - add static file serving
+- added config file
 
 ---
 

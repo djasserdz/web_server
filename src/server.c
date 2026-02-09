@@ -1,3 +1,4 @@
+#include "config.h"
 #include "request.h"
 #include "response.h"
 #include "handler.h"
@@ -11,10 +12,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
-#define PORT 8080
-#define IP "127.0.0.1"
-
-int create_server_socket(int port)
+int create_server_socket(char *ip, int port)
 {
     int server = socket(AF_INET, SOCK_STREAM, 0);
     if (server == -1)
@@ -25,8 +23,8 @@ int create_server_socket(int port)
     struct sockaddr_in adress;
     adress.sin_family = AF_INET;
     // adress.sin_addr.s_addr = INADDR_ANY;
-    adress.sin_port = htons(PORT);
-    inet_pton(AF_INET, IP, &adress.sin_addr);
+    adress.sin_port = htons(port);
+    inet_pton(AF_INET, ip, &adress.sin_addr);
 
     if (bind(server, (struct sockaddr *)&adress, sizeof(adress)) < 0)
     {
