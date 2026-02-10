@@ -4,18 +4,66 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include "config.h"
+#include <sys/types.h>
+#include <sys/socket.h>
+#include "proxy.h"
 
 #define STATIC_DIR "static"
 
+#include "proxy.h"
+#include "config.h"
+
 void handle_request(int client_fd, struct request *req)
 {
+    Config config;
+    if (read_config("config.cfg", &config) != 0)
+    {
+        printf("Failed to read config file\n");
+        return;
+    }
+
     struct response res;
     strcpy(res.http_version, req->http_version);
+
     Header server = {"Server", "MyCServer/0.1"};
-    Header date = {"Date",
-                   NULL};
+    Header date = {"Date", NULL};
     res.Server = &server;
     res.Date = &date;
+
+    if (config.proxy_enabled && strncmp(req->path, "/api/", 5) == 0)
+    {
+        int proxy_sock = open_proxy_connection(config.proxy_host, config.proxy_port);
+        if (proxy_sock < 0)
+        {
+            set_response(&res, 500);
+            send_response(client_fd, &res, "<h1>Proxy Error</h1>", 22, "text/html");
+            return;
+        }
+
+        char request_buf[8192];
+        int len = snprintf(request_buf, sizeof(request_buf),
+                           "%s %s %s\r\nHost: %s\r\nContent-Length: %ld\r\n\r\nConnection: close\r\n\r\n",
+                           req->method,
+                           req->path,
+                           req->http_version,
+                           req->Host ? req->Host->value : "localhost",
+                           req->body_length);
+
+        if (req->body_length > 0 && req->body)
+        {
+            memcpy(request_buf + len, req->body, req->body_length);
+            len += req->body_length;
+        }
+
+        send_proxy_request(proxy_sock, request_buf, len);
+
+        read_proxy_response(proxy_sock, client_fd);
+
+        close(proxy_sock);
+        return;
+    }
+
     long body_size = 0;
     char *body = serve_static_file(req->path, &res, &body_size);
 
@@ -27,15 +75,10 @@ void handle_request(int client_fd, struct request *req)
     }
     else
     {
-        {
-            set_response(&res, 404);
-
-            const char *content_type = "text/html";
-
-            const char *not_found_body = "<h1>404 Not Found</h1>";
-
-            send_response(client_fd, &res, not_found_body, strlen(not_found_body), content_type);
-        }
+        set_response(&res, 404);
+        const char *content_type = "text/html";
+        const char *not_found_body = "<h1>404 Not Found</h1>";
+        send_response(client_fd, &res, not_found_body, strlen(not_found_body), content_type);
     }
 }
 

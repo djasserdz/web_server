@@ -17,7 +17,7 @@ A basic HTTP web server written in C. This server demonstrates:
 ## How to Compile
 
 ```bash
-gcc main.c src/config.c src/server.c src/request.c src/response.c src/log.c src/handler.c -Iinclude -o myserver
+gcc main.c src/*.c -Iinclude -o myserver
 
 
 ./myserver
