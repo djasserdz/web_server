@@ -6,11 +6,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+
+#define BUFFER_SIZE 8192
 
 int create_server_socket(char *ip, int port)
 {
@@ -67,41 +70,111 @@ void start_server(int server_fd)
     {
         int client = accept(server_fd, NULL, NULL);
 
-        if (client >= 0)
+        if (client < 0)
         {
-            char buffer[1024];
-            ssize_t bytes = recv(client, buffer, sizeof(buffer), 0);
+            if (errno != EAGAIN && errno != EWOULDBLOCK)
+                perror("accept failed");
+            continue;
+        }
 
-            if (bytes > 0)
+        set_non_blocking(client);
+
+        char buffer[BUFFER_SIZE];
+        size_t received_total = 0;
+        ssize_t n;
+
+        struct request req;
+        memset(&req, 0, sizeof(req));
+        struct response res;
+        memset(&res, 0, sizeof(res));
+        int headers_complete = 0;
+        long content_length = 0;
+
+        while (1)
+        {
+            n = recv(client, buffer + received_total, sizeof(buffer) - received_total, 0);
+            if (n > 0)
             {
-                struct request req;
-                parse_request(buffer, bytes, &req);
+                received_total += n;
 
-                struct response res;
-                handle_request(client, &req);
+                if (!headers_complete)
+                {
+                    char *body_start = strstr(buffer, "\r\n\r\n");
+                    if (body_start)
+                    {
+                        headers_complete = 1;
+                        parse_request(buffer, received_total, &req);
+
+                        if (req.invalid_method)
+                        {
+                            set_response(&res, 405);
+                            send_response(client, &res, "<h1>405 Method Not Allowed</h1>", 28, "text/html");
+                            close(client);
+                            continue;
+                        }
+
+                        if (req.invalid_version)
+                        {
+                            set_response(&res, 505);
+                            send_response(client, &res, "<h1>505 HTTP Version Not Supported</h1>", 40, "text/html");
+                            close(client);
+                            continue;
+                        }
+
+                        if (req.Content_length && req.Content_length->value)
+                        {
+                            content_length = atol(req.Content_length->value);
+                        }
+
+                        if (content_length == 0 || (received_total - (body_start - buffer + 4)) >= content_length)
+                            break;
+                    }
+                }
+                else
+                {
+                    char *body_start = strstr(buffer, "\r\n\r\n") + 4;
+                    long body_received = received_total - (body_start - buffer);
+                    if (body_received >= content_length)
+                        break;
+                }
             }
-            else if (bytes == 0)
+            else if (n == 0)
             {
                 close(client);
+                break;
             }
-            else if (bytes == -1 && errno == EAGAIN)
+            else if (errno == EAGAIN || errno == EWOULDBLOCK)
             {
+                continue;
             }
             else
             {
                 perror("recv failed");
                 close(client);
+                break;
             }
+        }
 
-            close(client);
-        }
-        else if (client == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
-        {
+        if (received_total == 0)
             continue;
-        }
-        else
+
+        if (req.Content_length && content_length > 0)
         {
-            perror("accept failed");
+            char *body_start = strstr(buffer, "\r\n\r\n") + 4;
+            req.body_length = received_total - (body_start - buffer);
+            req.body = malloc(content_length);
+            if (!req.body)
+            {
+                perror("malloc failed");
+                close(client);
+                continue;
+            }
+            memcpy(req.body, body_start, req.body_length);
         }
+        handle_request(client, &req);
+
+        if (req.body)
+            free(req.body);
+        close(client);
     }
 }

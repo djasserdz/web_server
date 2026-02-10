@@ -27,7 +27,15 @@ void handle_request(int client_fd, struct request *req)
     }
     else
     {
-        send_response(client_fd, &res, "<h1>404 Not Found</h1>", strlen("<h1>404 Not Found</h1>"), "text/html");
+        {
+            set_response(&res, 404);
+
+            const char *content_type = "text/html";
+
+            const char *not_found_body = "<h1>404 Not Found</h1>";
+
+            send_response(client_fd, &res, not_found_body, strlen(not_found_body), content_type);
+        }
     }
 }
 

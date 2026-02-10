@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include "log.h"
 
 void send_response(int client_fd, struct response *res, const char *body, long body_size, const char *content_type)
 {
@@ -35,6 +36,9 @@ void send_response(int client_fd, struct response *res, const char *body, long b
                       res->http_version, res->status_code, res->message,
                       server_str, date_str,
                       body_size, content_type);
+    char log_msg[512];
+    snprintf(log_msg, sizeof(log_msg), "%s %d %s", res->http_version, res->status_code, res->message);
+    log_response(log_msg);
 
     send(client_fd, buffer, n, 0);
 
@@ -53,6 +57,12 @@ void set_response(struct response *res, int status_code)
     {
     case 200:
         strcpy(res->message, "OK");
+        break;
+    case 505:
+        strcpy(res->message, "HTTP Version Not Supported");
+        break;
+    case 405:
+        strcpy(res->message, "Method not allowed");
         break;
     case 404:
         strcpy(res->message, "Not Found");

@@ -16,7 +16,11 @@ struct request
     Header *Host;
     Header *Content_type;
     Header *Content_length;
+    char *body;
+    long body_length;
     int header_count;
+    int invalid_method;
+    int invalid_version;
 };
 
 void parse_request(char *buffer, ssize_t length, struct request *req);
