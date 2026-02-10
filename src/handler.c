@@ -31,24 +31,42 @@ void handle_request(int client_fd, struct request *req)
     res.Server = &server;
     res.Date = &date;
 
-    if (config.proxy_enabled && strncmp(req->path, "/api/", 5) == 0)
+    long body_size = 0;
+    char *body = serve_static_file(req->path, &res, &body_size);
+
+    if (body)
+    {
+        const char *mime = get_mime_type(req->path);
+        send_response(client_fd, &res, body, body_size, mime);
+        free(body);
+        return;
+    }
+
+    if (config.proxy_enabled)
     {
         int proxy_sock = open_proxy_connection(config.proxy_host, config.proxy_port);
         if (proxy_sock < 0)
         {
             set_response(&res, 500);
-            send_response(client_fd, &res, "<h1>Proxy Error</h1>", 22, "text/html");
+            send_response(client_fd, &res,
+                          "<h1>Proxy Error</h1>",
+                          strlen("<h1>Proxy Error</h1>"),
+                          "text/html");
             return;
         }
 
         char request_buf[8192];
-        int len = snprintf(request_buf, sizeof(request_buf),
-                           "%s %s %s\r\nHost: %s\r\nContent-Length: %ld\r\n\r\nConnection: close\r\n\r\n",
-                           req->method,
-                           req->path,
-                           req->http_version,
-                           req->Host ? req->Host->value : "localhost",
-                           req->body_length);
+        int len = snprintf(
+            request_buf, sizeof(request_buf),
+            "%s %s %s\r\n"
+            "Host: %s\r\n"
+            "Content-Length: %ld\r\n"
+            "Connection: close\r\n\r\n",
+            req->method,
+            req->path,
+            req->http_version,
+            req->Host ? req->Host->value : "localhost",
+            req->body_length);
 
         if (req->body_length > 0 && req->body)
         {
@@ -57,29 +75,17 @@ void handle_request(int client_fd, struct request *req)
         }
 
         send_proxy_request(proxy_sock, request_buf, len);
-
         read_proxy_response(proxy_sock, client_fd);
 
         close(proxy_sock);
         return;
     }
 
-    long body_size = 0;
-    char *body = serve_static_file(req->path, &res, &body_size);
-
-    if (body)
-    {
-        const char *mimes = get_mime_type(req->path);
-        send_response(client_fd, &res, body, body_size, mimes);
-        free(body);
-    }
-    else
-    {
-        set_response(&res, 404);
-        const char *content_type = "text/html";
-        const char *not_found_body = "<h1>404 Not Found</h1>";
-        send_response(client_fd, &res, not_found_body, strlen(not_found_body), content_type);
-    }
+    set_response(&res, 404);
+    send_response(client_fd, &res,
+                  "<h1>404 Not Found</h1>",
+                  strlen("<h1>404 Not Found</h1>"),
+                  "text/html");
 }
 
 char *serve_static_file(const char *path, struct response *res, long *out_size)
